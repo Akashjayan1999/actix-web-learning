@@ -1,5 +1,7 @@
+use std::path;
+
 use actix_web::{    
-    web, App, HttpResponse, HttpServer,
+    web, App, HttpResponse, HttpServer,Responder, get,
 };
 
 #[actix_web::main]
@@ -16,10 +18,28 @@ async fn main() {
          }))
           .route("/",web::put().to(|| async { 
             HttpResponse::Ok().body("PUT request!") 
-         }))
+         })).service(hello)
+            .service(world)
+            .service(dynamic)
 
    })
    .bind("127.0.0.1:8080").unwrap()
    .run()
    .await.unwrap();
 }
+
+#[get("/hello")]
+async fn hello()-> impl Responder {
+    HttpResponse::Ok().body("Hello, world!")
+}
+
+#[get("/world")]
+async fn world()-> impl Responder {
+    HttpResponse::Ok().body(" world!")
+}
+
+#[get("/use/{id}")]
+async fn dynamic(path : web::Path<i32>)-> impl Responder {
+    HttpResponse::Ok().body(format!("Hello, {}!", path.into_inner()))
+}
+
