@@ -1,13 +1,7 @@
 use std::{clone, fmt::format, path, sync::Mutex};
 
 use actix_web::{
-    App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder,
-    body::MessageBody,
-    dev::{ServiceRequest, ServiceResponse},
-    get,
-    middleware::{Next, from_fn},
-    post,
-    web::{self, Json},
+    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, get, guard, middleware::{from_fn, Next}, post, web::{self, Json, Redirect}, App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder
 };
 use serde::de;
 use serde_json::{self};
@@ -45,8 +39,10 @@ async fn main() {
                 "/",
                 web::put().to(|| async { HttpResponse::Ok().body("PUT request!") }),
             )
+            .service(web::redirect("/api/hello2", "/api/world2"))
             .service(
                 web::scope("/api")
+                    .guard(guard::Get())
                     .route("/hello2", web::get().to(hello2))
                     .route("/world2", web::get().to(world2))
                     .wrap(from_fn(my_middleware)),
@@ -69,8 +65,10 @@ async fn main() {
 
 #[get("/hello")]
 async fn hello(person: web::Data<Person>) -> impl Responder {
-    let msg = format!("name: {}, age: {}", person.name, person.age);
-    HttpResponse::Ok().body(msg)
+    web::redirect("/hello", "/world")
+    //Redirect::to("/world")
+    // let msg = format!("name: {}, age: {}", person.name, person.age);
+    // HttpResponse::Ok().body(msg)
 }
 
 #[get("/world")]
@@ -84,9 +82,26 @@ async fn world(person: web::Data<MutablePerson>) -> impl Responder {
 }
 
 #[get("/use/{id}")]
+async fn redirect_dynamic(path: web::Path<i32>) -> impl Responder {
+    Redirect::to("/world")
+    // HttpResponse::Ok().body(format!("Hello, {}!", path.into_inner()))
+}
+    
+#[get("/use/{id}")]
 async fn dynamic(path: web::Path<i32>) -> impl Responder {
+   
     HttpResponse::Ok().body(format!("Hello, {}!", path.into_inner()))
 }
+
+
+#[get("/hello/{a:.*}")]
+async fn wild_card(req:HttpRequest) -> impl Responder {
+    let path = req.match_info().query("a");
+    let msg = format!("path: {}", path);
+    HttpResponse::Ok().body(msg)
+  
+}
+
 
 #[get("/user")]
 async fn user(info: web::Query<Info>) -> impl Responder {
