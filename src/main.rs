@@ -1,7 +1,7 @@
 use std::{clone, fmt::format, path, sync::Mutex};
 
 use actix_web::{
-    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, get, guard, middleware::{from_fn, Next}, post, web::{self, Json, Redirect}, App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder
+    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, get, guard, http::header::ContentType, middleware::{from_fn, Next}, post, web::{self, Form, Json, Redirect}, App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder
 };
 use serde::de;
 use serde_json::{self};
@@ -47,6 +47,8 @@ async fn main() {
                     .route("/world2", web::get().to(world2))
                     .wrap(from_fn(my_middleware)),
             )
+            .service(web::scope("/actix").configure(config))
+            .service(web::scope("/actix2").configure(config))
             .service(hello)
             .service(world)
             .service(dynamic)
@@ -109,11 +111,31 @@ async fn user(info: web::Query<Info>) -> impl Responder {
     HttpResponse::Ok().body(msg)
 }
 
+
+#[get("/custom-response")]
+async fn custom_reponse() -> impl Responder {
+    Person {
+        name: "Alice".to_string(),
+        age: 30,
+    }
+}
+
 #[post("/user")]
 async fn postuser(userItem: Json<User>) -> impl Responder {
     let msg = format!("name: {}, age: {}", userItem.name, userItem.age);
     HttpResponse::Ok().body(msg)
 }
+
+
+
+#[post("/hello")]
+async fn post_form(info: Form<Info>) -> impl Responder {
+    let msg = format!("name: {}, age: {}", info.name, info.age);
+    HttpResponse::Ok().body(msg)
+}
+
+
+
 
 #[get("/hello3")]
 async fn hello3() -> impl Responder {
@@ -182,7 +204,30 @@ struct Person {
     age: u8,
 }
 
+impl Responder for Person {
+    type Body = actix_web::body::BoxBody;
+
+    fn respond_to(self, _req: &HttpRequest) -> HttpResponse<Self::Body> {
+        // Create response and set content type
+        let body = serde_json::to_string(&self).unwrap();
+
+        HttpResponse::Ok()
+            .content_type(ContentType::json())
+            .body(body)
+    }
+}
+
 struct MutablePerson {
     name: Mutex<String>,
     age: Mutex<u8>,
+}
+
+
+fn config(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::scope("/api2")
+        .guard(guard::Get())
+        .route("/hello2", web::get().to( ||async{HttpResponse::Ok().body("hello2")}))
+        .route("/world2", web::get().to(world2))
+        .wrap(from_fn(my_middleware)));
+    cfg.service(world);
 }
