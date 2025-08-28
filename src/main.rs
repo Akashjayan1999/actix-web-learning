@@ -1,7 +1,7 @@
-use std::{clone, fmt::format, path, sync::Mutex};
+use std::{clone, fmt::{format, Display}, path, sync::Mutex};
 
 use actix_web::{
-    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, get, guard, http::header::ContentType, middleware::{from_fn, Next}, post, web::{self, Form, Json, Redirect}, App, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder
+    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, error::ErrorBadRequest, get, guard, http::header::ContentType, middleware::{from_fn, Next}, post, web::{self, Form, Json, Redirect}, App, Either, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError
 };
 use serde::de;
 use serde_json::{self};
@@ -55,6 +55,9 @@ async fn main() {
             .service(user)
             .service(postuser)
             .service(hello3)
+            .service(either_response)
+            .service(error_reponse)
+            .service(custom_error_reponse)
             .default_service(web::to(not_found))
             .wrap(from_fn(my_middleware))
     })
@@ -63,6 +66,16 @@ async fn main() {
     .run()
     .await
     .unwrap();
+}
+
+
+fn config(cfg: &mut web::ServiceConfig) {
+    cfg.service(web::scope("/api2")
+        .guard(guard::Get())
+        .route("/hello2", web::get().to( ||async{HttpResponse::Ok().body("hello2")}))
+        .route("/world2", web::get().to(world2))
+        .wrap(from_fn(my_middleware)));
+    cfg.service(world);
 }
 
 #[get("/hello")]
@@ -153,11 +166,11 @@ async fn hello2(req: HttpRequest) -> impl Responder {
         Some(msg) => HttpResponse::Ok().body(format!("name: {}, age: {}", msg.name, msg.age)),
         None => HttpResponse::Ok().body("No data in extensions"),
     }
-    // HttpResponse::BadRequest().body("Hello, world2!")
+   
 }
 
 async fn world2(req: HttpRequest) -> impl Responder {
-    // HttpResponse::InternalServerError().body("Hello, world2!")
+   
     match req.extensions().get::<String>() {
         Some(msg) => HttpResponse::Ok().body(msg.to_string()),
         None => HttpResponse::Ok().body("No data in extensions"),
@@ -165,7 +178,35 @@ async fn world2(req: HttpRequest) -> impl Responder {
 }
 
 async fn not_found() -> impl Responder {
+     // HttpResponse::BadRequest().body("Hello, world2!")
+     // HttpResponse::InternalServerError().body("Hello, world2!")
     HttpResponse::NotFound().body("404 Not Found")
+}
+
+#[get("/either-response/{id}")]
+async fn either_response(id:web::Path<i32>) -> Either<String, HttpResponse> {
+   let id = id.into_inner();
+   if id < 10 {
+     Either::Left("Hello, world!".to_string())
+   }else{
+     Either::Right(HttpResponse::Ok().body("Hello, world!"))
+   }
+}
+
+#[get("/error-response/{id}")]
+async fn error_reponse(id:web::Path<i32>) -> Result<impl Responder, Error>{
+   let id = id.into_inner();
+    if id < 10 {
+      Ok(HttpResponse::Ok().body("Hello, world!"))
+      }else{
+        Err(ErrorBadRequest("Bad Request"))
+      }
+}
+
+
+#[get("/custom-error-response")]
+async fn custom_error_reponse() -> Result<String, MyError>{
+    Err(MyError{message: "This is a custom error".to_string()})
 }
 
 async fn my_middleware(
@@ -223,11 +264,18 @@ struct MutablePerson {
 }
 
 
-fn config(cfg: &mut web::ServiceConfig) {
-    cfg.service(web::scope("/api2")
-        .guard(guard::Get())
-        .route("/hello2", web::get().to( ||async{HttpResponse::Ok().body("hello2")}))
-        .route("/world2", web::get().to(world2))
-        .wrap(from_fn(my_middleware)));
-    cfg.service(world);
+
+#[derive(Debug)]
+struct MyError{
+    message: String,
+}
+
+impl Display for MyError{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Error Message: {}", self.message)
+    }
+}
+
+impl ResponseError for MyError{
+   
 }
