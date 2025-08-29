@@ -1,7 +1,7 @@
 use std::{clone, fmt::{format, Display}, path, sync::Mutex};
 
 use actix_web::{
-    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, error::ErrorBadRequest, get, guard, http::header::ContentType, middleware::{from_fn, Next}, post, web::{self, Form, Json, Redirect}, App, Either, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError
+    body::MessageBody, dev::{ServiceRequest, ServiceResponse}, error::ErrorBadRequest, get, guard, http::{header::ContentType, StatusCode}, middleware::{from_fn, Next}, post, test, web::{self, Form, Json, Redirect}, App, Either, Error, HttpMessage, HttpRequest, HttpResponse, HttpServer, Responder, ResponseError
 };
 use serde::de;
 use serde_json::{self};
@@ -58,6 +58,7 @@ async fn main() {
             .service(either_response)
             .service(error_reponse)
             .service(custom_error_reponse)
+            .service(actix_files::Files::new("/static", "./assets").show_files_listing())
             .default_service(web::to(not_found))
             .wrap(from_fn(my_middleware))
     })
@@ -279,3 +280,13 @@ impl Display for MyError{
 impl ResponseError for MyError{
    
 }
+
+#[actix_web::test]
+async fn test_hello() {
+    let app = test::init_service(App::new().service(hello)).await;
+    let req = test::TestRequest::get().uri("/hello").to_request();
+    let res = test::call_service(&app, req).await;
+   // assert!(res.status().is_success());
+    assert_eq!(res.status(), StatusCode::OK);
+}
+
