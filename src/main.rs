@@ -5,6 +5,8 @@ use actix_web::{
 };
 use serde::de;
 use serde_json::{self};
+use tokio_util::{bytes, codec::BytesCodec};
+use futures_util::stream::StreamExt;
 
 #[actix_web::main]
 async fn main() {
@@ -208,6 +210,14 @@ async fn error_reponse(id:web::Path<i32>) -> Result<impl Responder, Error>{
 #[get("/custom-error-response")]
 async fn custom_error_reponse() -> Result<String, MyError>{
     Err(MyError{message: "This is a custom error".to_string()})
+}
+
+
+#[get("/stream")]
+async fn stream_reponse() -> impl Responder {
+    let file = tokio::fs::File::open("hello.txt").await.unwrap();
+    let stm = tokio_util::codec::FramedRead::new(file,BytesCodec::new()).map(|r| r.map(|b| b.freeze()));
+    HttpResponse::Ok().streaming(stm)
 }
 
 async fn my_middleware(
